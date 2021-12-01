@@ -1,0 +1,124 @@
+# increments frontend patch version
+name: testFlow
+
+# Controls when the action will run.
+on:
+  push:
+    branches: [master, stage]
+    paths-ignore:
+      - "FS.MobileApi/**"
+      - ".github/**"
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  PatchVersion_Publish:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./FS.WebAdmin/
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: CheckOut
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      # examples here https://github.com/dorny/paths-filter#examples
+      # todo rewrite to grep -R --exclude-dir=node_modules 'some pattern' /path/to/search
+      - name: Define isFrontend/isBackend changes
+        uses: dorny/paths-filter@v2
+        id: myFilter
+        with:
+          base: ${{ github.ref }}
+          # details about exclude here: https://github.com/dorny/paths-filter/issues/97
+          filters: |
+            isFrontend:
+              - 'FS.WebAdmin/ClientApp/**'
+            isBackend:
+              - '!(FS.WebAdmin/ClientApp/**)**'
+
+      - name: Get current date
+        run: echo "APP_VERSION_DATE=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+
+      - name: UI. Cache build
+        id: cache-uiBuild
+        uses: actions/cache@v2
+        with:
+          path: |
+            **/wwwroot
+          key: ui-build-${{ env.APP_VERSION_DATE }}
+          restore-keys: ui-build-
+
+      - name: UI. Setup Node14
+        if: steps.myFilter.outputs.isFrontend == 'true' || steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v2
+        with:
+          node-version: "14"
+
+      - name: UI. Cache node_modules
+        if: steps.myFilter.outputs.isFrontend == 'true' || steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch'
+        id: cache-modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            **/node_modules
+            **/.eslintcache
+            **/.stylelintcache
+          key: ${{ runner.OS }}-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: UI. Install node_modules
+        if: steps.cache-uiBuild.outputs.cache-hit != 'true' || (steps.myFilter.outputs.isFrontend == 'true' && steps.cache-modules.outputs.cache-hit != 'true') || github.event_name == 'workflow_dispatch'
+        working-directory: ./FS.WebAdmin/ClientApp
+        run: npm ci #npm ci faster for installing
+
+      - name: UI. Patch version (or just get)
+        working-directory: ./FS.WebAdmin/ClientApp
+        run: | #  export VER=f$(npm version patch --no-git-tag-version)
+          export appVersionPath=appVersion.txt
+          if [ ${{steps.myFilter.outputs.isFrontend}} == true && ${GITHUB_REF#refs/heads/} != master ]
+          then export uiInc=1
+          else export uiInc=0  
+          fi
+          export VER=$(sed -E 's/([0-9]+).([0-9]+).([0-9]+)(.*)/echo "\1.\2.$((\3+${uiInc}))\4"/e' ${appVersionPath}) && printf "$VER\n" > ${appVersionPath}
+          echo "UI_VERSION=ui$VER" >> $GITHUB_ENV
+
+      - name: UI. Build
+        if: steps.myFilter.outputs.isFrontend == 'true' || steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ./FS.WebAdmin/ClientApp
+        run: npm run build-prod # output produces to wwwroot
+
+      - name: UI. Commit version
+        if: steps.myFilter.outputs.isFrontend == 'true' && github.ref != 'refs/heads/master'
+        run: |
+          git config advice.ignoredHook false
+          git config --global user.name 'bump-bot'
+          git config --global user.email 'bump-bot@users.noreply.github.com'
+          git add --all
+        #   git commit -m "AdminWeb. Bump frontend version to ${{ env.UI_VERSION }}"
+        #   git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
+        # it doesn't required because we have only mobileApi version
+        # git pull --tags
+        # git tag ${{ env.UI_VERSION }}
+        # git push --tags || :
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: API. Commit version
+        if: steps.myFilter.outputs.isBackend == 'true' && github.ref != 'refs/heads/master'
+        run: |
+          git config advice.ignoredHook false
+          git config --global user.name 'bump-bot'
+          git config --global user.email 'bump-bot@users.noreply.github.com'
+          git add --all
+        #   git commit -m "AdminWeb. Bump backend version to ${{ env.API_VERSION }}"
+        #   git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
+        # it doesn't required because we have only mobileApi version
+        # git pull --tags
+        # git tag ${{ env.API_VERSION }}
+        # git push --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
