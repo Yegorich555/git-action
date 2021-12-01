@@ -79,7 +79,7 @@ jobs:
           key: ${{ runner.OS }}-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: UI. Install node_modules
-        if: env.NEED_FRONTEND == 1 && (steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch')
+        if: env.NEED_FRONTEND == 1 && (steps.cache-modules.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch')
         working-directory: ./FS.WebAdmin/ClientApp
         run: npm ci #npm ci faster for installing
 
