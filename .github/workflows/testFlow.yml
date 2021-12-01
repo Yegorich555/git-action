@@ -53,7 +53,7 @@ jobs:
           key: ui-build-${{ env.APP_VERSION_DATE }}
           restore-keys: ui-build-
 
-      - name: Define NEED_FRONTEND
+      - name: Define env.NEED_FRONTEND
         working-directory: ./FS.WebAdmin/ClientApp
         run: |
           if [ ${{steps.myFilter.outputs.isFrontend}} == true ] || [ ${{steps.cache-uiBuild.outputs.cache-hit}} != true] || [ ${{github.event_name}} == workflow_dispatch ]
@@ -62,13 +62,13 @@ jobs:
           fi
 
       - name: UI. Setup Node14
-        if: NEED_FRONTEND == 1
+        if: env.NEED_FRONTEND == 1
         uses: actions/setup-node@v2
         with:
           node-version: "14"
 
       - name: UI. Cache node_modules
-        if: NEED_FRONTEND == 1
+        if: env.NEED_FRONTEND == 1
         id: cache-modules
         uses: actions/cache@v2
         with:
@@ -79,7 +79,7 @@ jobs:
           key: ${{ runner.OS }}-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: UI. Install node_modules
-        if: NEED_FRONTEND == 1 && (steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch')
+        if: env.NEED_FRONTEND == 1 && (steps.cache-uiBuild.outputs.cache-hit != 'true' || github.event_name == 'workflow_dispatch')
         working-directory: ./FS.WebAdmin/ClientApp
         run: npm ci #npm ci faster for installing
 
@@ -95,7 +95,7 @@ jobs:
           echo "UI_VERSION=ui$VER" >> $GITHUB_ENV
 
       - name: UI. Build
-        if: NEED_FRONTEND == 1
+        if: env.NEED_FRONTEND == 1
         working-directory: ./FS.WebAdmin/ClientApp
         run: npm run build-prod # output produces to wwwroot
 
