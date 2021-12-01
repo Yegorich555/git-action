@@ -4,7 +4,7 @@ name: testFlow
 # Controls when the action will run.
 on:
   push:
-    branches: [master, stage]
+    branches: [master]
     paths-ignore:
       - "FS.MobileApi/**"
       - ".github/**"
