@@ -1,5 +1,5 @@
 # increments frontend patch version
-name: testFlow
+name: Publish AdminWEB to AWS-EB
 
 # Controls when the action will run.
 on:
@@ -49,7 +49,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: |
-            **/wwwroot
+            ~/**/wwwroot
           key: ui-build-${{ env.APP_VERSION_DATE }}
           restore-keys: ui-build-
 
@@ -79,7 +79,7 @@ jobs:
         working-directory: ./FS.WebAdmin/ClientApp
         run: | #  export VER=f$(npm version patch --no-git-tag-version)
           export appVersionPath=appVersion.txt
-          if [ ${{steps.myFilter.outputs.isFrontend}} == true && ${GITHUB_REF#refs/heads/} != master ]
+          if [ ${{steps.myFilter.outputs.isFrontend}} == true ] && [ ${{github.ref_name}} != master ]
           then export uiInc=1
           else export uiInc=0  
           fi
@@ -92,14 +92,14 @@ jobs:
         run: npm run build-prod # output produces to wwwroot
 
       - name: UI. Commit version
-        if: steps.myFilter.outputs.isFrontend == 'true' && github.ref != 'refs/heads/master'
+        if: steps.myFilter.outputs.isFrontend == 'true' && github.ref_name != 'master'
         run: |
           git config advice.ignoredHook false
           git config --global user.name 'bump-bot'
           git config --global user.email 'bump-bot@users.noreply.github.com'
           git add --all
-        #   git commit -m "AdminWeb. Bump frontend version to ${{ env.UI_VERSION }}"
-        #   git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
+        # git commit -m "AdminWeb. Bump frontend version to ${{ env.UI_VERSION }}"
+        # git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
         # it doesn't required because we have only mobileApi version
         # git pull --tags
         # git tag ${{ env.UI_VERSION }}
@@ -107,15 +107,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      #BE part
+      - name: API. Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: "5.0.x"
+
+      # uncomment if installing packages are slow otherwise cache takes more time than installing packages
+      # - name: Cache nuget-packages
+      #   if: steps.myFilter.outputs.isBackend == 'true'
+      #   id: cache-nuget
+      #   uses: actions/cache@v2
+      #   with:
+      #     path: |
+      #       ~/.nuget/packages
+      #     key: ${{ runner.OS }}-nuget-${{ hashFiles('**/FS.WebAdmin.csproj') }}
+
+      # - name: Install nuget-packages
+      #   if: steps.cache-nuget.outputs.cache-hit != 'true' && steps.myFilter.outputs.isBackend == 'true'
+      #   run: dotnet restore "./FS.WebAdmin.csproj"
+
+      - name: API. Build
+        if: steps.myFilter.outputs.isBackend == 'true'
+        run: dotnet build "./FS.WebAdmin.csproj" -c Release #-o /app/build #--no-restore
+
+      - name: API. Patch version (or just get)
+        run: |
+          export appVersionPath=appVersion.txt
+          if [ ${{steps.myFilter.outputs.isBackend}} == true ] && [ ${{github.ref_name}} != master ]
+          then export uiInc=1 
+          else export uiInc=0  
+          fi
+          export VER=$(sed -E 's/([0-9]+).([0-9]+).([0-9]+)(.*)/echo "\1.\2.$((\3+${uiInc}))\4"/e' ${appVersionPath}) && printf "$VER\n" > ${appVersionPath}
+          echo "API_VERSION=api$VER" >> $GITHUB_ENV
+
       - name: API. Commit version
-        if: steps.myFilter.outputs.isBackend == 'true' && github.ref != 'refs/heads/master'
+        if: steps.myFilter.outputs.isBackend == 'true' && github.ref_name != 'master'
         run: |
           git config advice.ignoredHook false
           git config --global user.name 'bump-bot'
           git config --global user.email 'bump-bot@users.noreply.github.com'
           git add --all
-        #   git commit -m "AdminWeb. Bump backend version to ${{ env.API_VERSION }}"
-        #   git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
+        # git commit -m "AdminWeb. Bump backend version to ${{ env.API_VERSION }}"
+        # git push || (git pull --ff && git push) || (sleep 5 && git pull --ff && git push)
         # it doesn't required because we have only mobileApi version
         # git pull --tags
         # git tag ${{ env.API_VERSION }}
