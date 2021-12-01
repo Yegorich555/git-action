@@ -135,9 +135,9 @@ jobs:
       #   if: steps.cache-nuget.outputs.cache-hit != 'true' && steps.myFilter.outputs.isBackend == 'true'
       #   run: dotnet restore "./FS.WebAdmin.csproj"
 
-      - name: API. Build
-        if: steps.myFilter.outputs.isBackend == 'true'
-        run: dotnet build "./FS.WebAdmin.csproj" -c Release #-o /app/build #--no-restore
+      # - name: API. Build
+      #   if: steps.myFilter.outputs.isBackend == 'true'
+      #   run: dotnet build "./FS.WebAdmin.csproj" -c Release #-o /app/build #--no-restore
 
       - name: API. Patch version (or just get)
         run: |
